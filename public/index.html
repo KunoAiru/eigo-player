@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>英語音声プレーヤー</title>
+  <meta name="theme-color" content="#14161a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="英語音声">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="top-row">
+      <select id="bookSelect" class="book-select" aria-label="教材を選ぶ"></select>
+      <button id="menuBtn" class="icon-btn" aria-label="設定と取り込み">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+    </div>
+    <div class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="search" type="search" inputmode="search" autocomplete="off"
+             placeholder="検索: r2 3-4 / 500 / 7週目 / CD3">
+      <button id="clearSearch" class="clear" aria-label="検索をクリア" hidden>×</button>
+    </div>
+    <div id="chips" class="chips" role="tablist"></div>
+  </header>
+
+  <main>
+    <p id="status" class="status"></p>
+    <ul id="list" class="list"></ul>
+  </main>
+
+  <button id="jumpNow" class="jump-now" hidden>再生中の音声へ</button>
+
+  <footer class="player" id="player">
+    <div class="np">
+      <div class="np-text">
+        <div id="npTitle" class="np-title">音声を選んでください</div>
+        <div id="npSub" class="np-sub"></div>
+      </div>
+      <button id="rateBtn" class="pill" aria-label="再生速度">1.0×</button>
+      <button id="repeatBtn" class="pill" aria-label="リピート">連続</button>
+    </div>
+    <div class="seek">
+      <span id="cur" class="time">0:00</span>
+      <input id="seek" type="range" min="0" max="0" step="0.1" value="0" aria-label="再生位置">
+      <span id="dur" class="time">0:00</span>
+    </div>
+    <div class="controls">
+      <button id="prevBtn" class="ctrl" aria-label="前の音声">
+        <svg viewBox="0 0 24 24"><path d="M6 5v14M19 5 9 12l10 7z" class="fill"/></svg>
+      </button>
+      <button id="backBtn" class="ctrl" aria-label="10秒戻す">
+        <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"/><text x="12" y="15.5">10</text></svg>
+      </button>
+      <button id="playBtn" class="ctrl play" aria-label="再生">
+        <svg viewBox="0 0 24 24" class="i-play"><path d="M8 5v14l11-7z" class="fill"/></svg>
+        <svg viewBox="0 0 24 24" class="i-pause"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" class="fill"/></svg>
+      </button>
+      <button id="fwdBtn" class="ctrl" aria-label="10秒進める">
+        <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v4.5h-4.5"/><text x="12" y="15.5">10</text></svg>
+      </button>
+      <button id="nextBtn" class="ctrl" aria-label="次の音声">
+        <svg viewBox="0 0 24 24"><path d="M18 5v14M5 5l10 7-10 7z" class="fill"/></svg>
+      </button>
+    </div>
+  </footer>
+
+  <dialog id="menu" class="sheet">
+    <form method="dialog" class="sheet-head">
+      <h2>設定・取り込み</h2>
+      <button class="icon-btn" aria-label="閉じる">×</button>
+    </form>
+
+    <section>
+      <h3>スマホに音声を取り込む</h3>
+      <p class="note">取り込んだ音声はこの端末に保存され、PC がオフでも再生できます。教材のフォルダ（toefl3800 など）か mp3 ファイルを選んでください。</p>
+      <div class="row">
+        <label class="btn">フォルダを選ぶ<input id="pickDir" type="file" webkitdirectory multiple hidden></label>
+        <label class="btn">ファイルを選ぶ<input id="pickFiles" type="file" accept="audio/*,.mp3,.m4a" multiple hidden></label>
+      </div>
+      <p id="importStatus" class="note"></p>
+      <ul id="localBooks" class="local-books"></ul>
+      <p id="storageInfo" class="note"></p>
+    </section>
+
+    <section id="lanSection" hidden>
+      <h3>スマホで開く（同じ Wi-Fi）</h3>
+      <p class="note">スマホのカメラで読み取るか、URL を入力してください。</p>
+      <div id="qr" class="qr"></div>
+      <ul id="lanUrls" class="urls"></ul>
+    </section>
+
+    <section>
+      <h3>検索のコツ</h3>
+      <ul class="tips">
+        <li><b>r2 3-4</b> … RANK2 3週目4日</li>
+        <li><b>500</b> … 単語番号 500 を含むトラック</li>
+        <li><b>7週目</b> / <b>cd3</b> / <b>について</b> など部分一致</li>
+        <li>スペース区切りで AND 検索</li>
+      </ul>
+    </section>
+  </dialog>
+
+  <audio id="audio" preload="metadata"></audio>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
