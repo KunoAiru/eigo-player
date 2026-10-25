@@ -1,16 +1,10 @@
 import { parseID3, id3TagSize } from './id3.js';
 import * as db from './db.js';
+import * as vocab from './vocab.js';
+import { unzip } from './zip.js';
+import { $, store, norm, escapeHtml } from './util.js';
 
-const $ = (id) => document.getElementById(id);
 const audio = $('audio');
-const store = {
-  get(key, fallback) {
-    try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
-  },
-  set(key, value) {
-    try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
-  },
-};
 
 const RATES = [0.75, 0.9, 1, 1.1, 1.25, 1.5, 2];
 const REPEAT = { all: '連続', one: '1曲↻', off: '1曲停止' };
@@ -29,8 +23,6 @@ const state = {
 };
 
 /* ---------------- search ---------------- */
-
-const norm = (s) => (s || '').normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
 
 function indexTrack(t) {
   const base = norm(`${t.title} ${t.file} ${t.discLabel} cd${t.disc}`);
@@ -55,8 +47,6 @@ function matches(t, tokens) {
     return false;
   });
 }
-
-const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 function highlight(text, tokens) {
   const words = tokens.filter((t) => !/^\d$/.test(t))
@@ -99,6 +89,7 @@ async function loadLibrary() {
   books.forEach((b) => b.tracks.forEach(indexTrack));
   state.books = books;
   if (!books.some((b) => b.id === state.bookId)) state.bookId = books[0]?.id ?? null;
+  await vocab.loadVocab(books);
 }
 
 const currentBook = () => state.books.find((b) => b.id === state.bookId);
@@ -163,15 +154,17 @@ function renderList() {
     const cur = index === playingHere;
     const num = cur ? '<span class="eq"><i></i><i></i><i></i></span>' : (t.track ?? index + 1);
     const sub = [t.discKey, t.file !== t.title ? t.file : ''].filter(Boolean).join(' · ');
+    const words = vocab.wordsForTrack(book, t).length;
     return `<li class="item${cur ? ' current' : ''}" data-index="${index}">
       <span class="num">${num}</span>
       <span class="txt"><div class="title">${highlight(t.title, tokens)}</div><div class="sub">${escapeHtml(sub)}</div></span>
+      ${words ? `<button class="wbtn" data-words="${index}" aria-label="この音声の単語 ${words}語">単語 ${words}</button>` : ''}
     </li>`;
   }).join('');
   updateJumpButton();
 }
 
-const render = () => { renderBooks(); renderChips(); renderList(); };
+const render = () => { renderBooks(); renderChips(); renderList(); vocab.renderWords(); };
 
 const fmt = (sec) => {
   if (!Number.isFinite(sec)) return '0:00';
@@ -192,6 +185,7 @@ function renderNowPlaying() {
   $('rateBtn').classList.toggle('on', state.rate !== 1);
   $('repeatBtn').textContent = REPEAT[state.repeat];
   $('repeatBtn').classList.toggle('on', state.repeat !== 'all');
+  $('wordsBtn').hidden = !t || !vocab.wordsForTrack(p.book, t).length;
 }
 
 function renderTime() {
@@ -206,9 +200,10 @@ function renderTime() {
 }
 
 function updateJumpButton() {
-  const el = document.querySelector('.item.current');
+  const el = document.querySelector('#list .item.current');
   let show = false;
-  if (state.playing && state.playing.book !== currentBook()) show = true;
+  if ($('audioView').hidden) show = false;
+  else if (state.playing && state.playing.book !== currentBook()) show = true;
   else if (el) {
     const r = el.getBoundingClientRect();
     const bottom = $('player').getBoundingClientRect().top;
@@ -228,8 +223,9 @@ function jumpToCurrent() {
   state.query = '';
   $('search').value = '';
   $('clearSearch').hidden = true;
+  vocab.setView('audio');
   render();
-  document.querySelector('.item.current')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  document.querySelector('#list .item.current')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
 /* ---------------- playback ---------------- */
@@ -373,8 +369,21 @@ audio.addEventListener('ended', () => {
 /* ---------------- import to this device ---------------- */
 
 async function importFiles(fileList) {
-  const files = [...fileList].filter((f) => AUDIO_RE.test(f.name) || f.type.startsWith('audio/'));
   const status = $('importStatus');
+  // A ZIP of the whole book folder (CD1, CD2 ... and vocab.json) counts as that folder.
+  const picked = [];
+  for (const f of fileList) {
+    if (/\.zip$/i.test(f.name)) {
+      status.textContent = `ZIP を開いています… ${f.name}`;
+      try { picked.push(...await unzip(f)); } catch (err) { status.textContent = `ZIP を読めませんでした: ${err?.message || err}`; return; }
+    } else {
+      picked.push(f);
+    }
+  }
+  fileList = picked;
+  const files = [...fileList].filter((f) => AUDIO_RE.test(f.name) || f.type.startsWith('audio/'));
+  const vocabFile = [...fileList].find((f) => f.name === 'vocab.json');
+  if (!files.length && vocabFile) { await importVocab(vocabFile); return; }
   if (!files.length) { status.textContent = '音声ファイル（mp3 など）が見つかりませんでした。'; return; }
   navigator.storage?.persist?.().catch(() => {});
   const recs = [];
@@ -385,7 +394,7 @@ async function importFiles(fileList) {
       const size = id3TagSize(new Uint8Array(await f.slice(0, 10).arrayBuffer()));
       if (size) tags = parseID3(new Uint8Array(await f.slice(0, Math.min(size, 2 * 1024 * 1024)).arrayBuffer()));
     } catch { /* untagged */ }
-    const rel = (f.webkitRelativePath || f.name).split('/');
+    const rel = (f.relPath || f.webkitRelativePath || f.name).split('/');
     const folder = rel.length > 1 ? rel[0] : '';
     const sub = rel.slice(1, -1).join('/');
     const base = f.name.replace(/\.[^.]+$/, '');
@@ -414,6 +423,7 @@ async function importFiles(fileList) {
   }
   const books = [...new Set(recs.map((r) => r.bookTitle))];
   status.textContent = `${recs.length} 件を保存しました: ${books.join('、')}`;
+  if (vocabFile) await importVocab(vocabFile, books[0]);
   const keepPlaying = state.playing && { id: state.playing.book.tracks[state.playing.index].id };
   await loadLibrary();
   if (keepPlaying) relinkPlaying(keepPlaying.id);
@@ -423,6 +433,19 @@ async function importFiles(fileList) {
   state.query = '';
   $('search').value = '';
   $('clearSearch').hidden = true;
+  render();
+  renderMenu();
+}
+
+async function importVocab(file, title = currentBook()?.title) {
+  const status = $('vocabStatus');
+  try {
+    const { title: saved, count } = await vocab.importVocabFile(file, title);
+    status.textContent = `単語 ${count} 語を保存しました: ${saved}`;
+  } catch (err) {
+    status.textContent = `単語データを読み込めませんでした: ${err?.message || err}`;
+    return;
+  }
   render();
   renderMenu();
 }
@@ -438,6 +461,7 @@ function relinkPlaying(trackId) {
 async function renderMenu() {
   const local = state.books.filter((b) => b.source === 'local');
   $('localBooks').innerHTML = local.map((b) => `<li><span>${escapeHtml(b.title)}（${b.tracks.length}件）</span><button data-del="${escapeHtml(b.id)}">削除</button></li>`).join('');
+  $('localVocab').innerHTML = vocab.localVocabList().map((v) => `<li><span>${escapeHtml(v.title)}（${v.count}語）</span><button data-del-vocab="${escapeHtml(v.title)}">削除</button></li>`).join('');
   const est = await navigator.storage?.estimate?.().catch(() => null);
   $('storageInfo').textContent = est ? `この端末の使用量: ${(est.usage / 1048576).toFixed(0)} MB` : '';
 
@@ -510,6 +534,8 @@ $('chips').addEventListener('click', (e) => {
 });
 
 $('list').addEventListener('click', (e) => {
+  const words = e.target.closest('[data-words]');
+  if (words) { vocab.showTrackWords(currentBook(), Number(words.dataset.words)); return; }
   const item = e.target.closest('[data-index]');
   if (!item) return;
   const book = currentBook();
@@ -524,6 +550,16 @@ $('nextBtn').addEventListener('click', () => step(1));
 $('backBtn').addEventListener('click', () => skip(-10));
 $('fwdBtn').addEventListener('click', () => skip(10));
 $('npTitle').addEventListener('click', jumpToCurrent);
+$('wordsBtn').addEventListener('click', () => {
+  const p = state.playing;
+  if (!p) return;
+  if (p.book !== currentBook()) {
+    state.bookId = p.book.id;
+    store.set('book', state.bookId);
+    render();
+  }
+  vocab.showTrackWords(p.book, p.index);
+});
 $('jumpNow').addEventListener('click', jumpToCurrent);
 
 $('rateBtn').addEventListener('click', () => {
@@ -552,6 +588,15 @@ $('menuBtn').addEventListener('click', () => { renderMenu(); $('menu').showModal
 $('menu').addEventListener('click', (e) => { if (e.target === $('menu')) $('menu').close(); });
 $('pickDir').addEventListener('change', (e) => { importFiles(e.target.files); e.target.value = ''; });
 $('pickFiles').addEventListener('change', (e) => { importFiles(e.target.files); e.target.value = ''; });
+$('pickVocab').addEventListener('change', (e) => { if (e.target.files[0]) importVocab(e.target.files[0]); e.target.value = ''; });
+$('localVocab').addEventListener('click', async (e) => {
+  const title = e.target.closest('[data-del-vocab]')?.dataset.delVocab;
+  if (!title || !confirm(`「${title}」の単語データをこの端末から削除しますか？`)) return;
+  await vocab.deleteLocalVocab(title);
+  await loadLibrary();
+  render();
+  renderMenu();
+});
 $('localBooks').addEventListener('click', async (e) => {
   const id = e.target.closest('[data-del]')?.dataset.del;
   if (!id) return;
@@ -591,6 +636,11 @@ window.addEventListener('pagehide', () => saveResume(true));
 (async () => {
   renderNowPlaying();
   $('status').textContent = '読み込み中…';
+  vocab.init({
+    books: () => state.books,
+    currentBook,
+    play: (book, index) => loadTrack(book, index),
+  });
   await loadLibrary();
   render();
   restoreResume();

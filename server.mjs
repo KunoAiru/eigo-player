@@ -20,6 +20,7 @@ const MIME = {
   '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png',
   '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.wav': 'audio/wav',
   '.ogg': 'audio/ogg', '.oga': 'audio/ogg', '.opus': 'audio/ogg', '.flac': 'audio/flac',
+  '.zip': 'application/zip',
 };
 
 const naturalCompare = new Intl.Collator('ja', { numeric: true }).compare;
@@ -75,7 +76,14 @@ async function scanLibrary() {
       };
     }));
     tracks.sort((a, b) => a.disc - b.disc || (a.track ?? 1e9) - (b.track ?? 1e9) || naturalCompare(a.id, b.id));
-    books.push({ id: ent.name, title: tracks.find((t) => t.album)?.album || ent.name, tracks });
+    // Word data made by tools/build_vocab.py lives next to the audio, never in this repo.
+    const hasVocab = await fsp.access(path.join(bookDir, 'vocab.json')).then(() => true, () => false);
+    books.push({
+      id: ent.name,
+      title: tracks.find((t) => t.album)?.album || ent.name,
+      tracks,
+      vocabUrl: hasVocab ? `/audio/${encodeURIComponent(ent.name)}/vocab.json` : undefined,
+    });
   }
   books.sort((a, b) => naturalCompare(a.title, b.title));
   return books;

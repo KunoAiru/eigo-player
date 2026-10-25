@@ -18,16 +18,47 @@ Windows のファイアウォールの確認が出たら「プライベートネ
 
 1. mp3 フォルダ（例: `toefl3800`）をスマホにコピーする（USB、Google ドライブなど）
 2. スマホでアプリを開き、右上のメニュー →「フォルダを選ぶ」または「ファイルを選ぶ」で取り込む
+   フォルダを選べないスマホでは、教材フォルダ（CD1, CD2 … と vocab.json）を丸ごと ZIP にして「ファイルを選ぶ」で選ぶ（無圧縮の ZIP なら大きくても速い）
 3. 取り込んだ音声は端末内に保存され、オフラインで再生できます
 
 アプリ本体は GitHub Pages で公開しています: https://kunoairu.github.io/eigo-player/
 スマホでこの URL を開き、「ホーム画面に追加」すればオフラインでも起動できます。
 `main` に push すると `.github/workflows/pages.yml` が `public/` だけを公開します（音声はこのリポジトリに含めません）。
 
+## 3. 単語帳（Kindle のスクリーンショットから作る）
+
+購入した Kindle 本を自分で学習するための機能です（私的利用のみ）。本の内容（vocab.json・スクショ）は
+このリポジトリに含めず、GitHub にも公開しません（`.gitignore` 済み）。
+
+1. Kindle for PC で本を開き、最初の単語ページ（RANK1 の 0001）を表示する
+2. 撮影しながら読み取る（100 枚ごとに読み取り、済んだ画像は削除）
+
+   ```
+   py tools/capture.py --batch 100 --delete --engine claude
+   ```
+
+   - Kindle は他のウィンドウの裏にあっても撮影・ページ送りできます（最小化はしない）。止めるときは Ctrl+C、再実行で続きから
+   - 巻末の索引まで来たら止めてかまいません（索引のページは読み取りの対象から外してください）
+   - 読み取り方を直したときは、画像を残しておけば `py tools/extract.py --engine windows --force` で撮り直さずに読み直せます
+   - `--engine claude` … 高精度。Anthropic の API キー（`ANTHROPIC_API_KEY`）と `py -m pip install anthropic` が必要（有料）。`--model` でモデルを変更可
+   - `--engine windows` … 無料・オフライン（Windows 標準 OCR）。品詞・同義語・反意語の四角いマークは画像から見つけて拡大して読む。発音記号は保存しない。派生語などに少し読み違いが残る
+   - 撮影だけしておき、あとで `py tools/extract.py --engine ...` で読み取ることもできます
+3. まとめる: `py tools/build_vocab.py` → `toefl3800/vocab.json` ができる（番号の抜けや訳語の空も表示）
+4. PC のサーバーなら自動で読み込まれます。スマホにはメニューの「単語データを取り込む」で vocab.json を選ぶ
+
+アプリの使い方
+- 「単語帳」タブ: 検索、★お気に入り、RANK 絞り込み。単語をタップで詳細（品詞ごとの訳・派生語・同義語・反意語・例文・補足）
+- 音声の一覧の「単語 40」/ 再生中の「単語」ボタン: その音声に収録されている単語だけを表示（本の「CD 1-4」表示で対応づけ）
+- 「カードで学習」: タップで裏返し、英→日 / 日→英、シャッフル、左右スワイプで前後、★登録
+
 ## ファイル構成
 
 - `server.mjs` … PC 用サーバー（依存なし、Node.js 18+）
 - `public/` … アプリ本体（このフォルダだけで静的ホスティング可）
   - `id3.js` … mp3 タグ（Shift-JIS 対応）の読み取り
-  - `db.js` … 端末内保存（IndexedDB）
+  - `db.js` … 端末内保存（IndexedDB、音声と単語データ）
+  - `vocab.js` … 単語帳・単語の詳細・フラッシュカード
+- `tools/` … 単語データ作成（Python 3.10+、Pillow・numpy）
+  - `capture.py` … Kindle の自動ページ送りと撮影 / `extract.py` … 読み取り / `build_vocab.py` … vocab.json にまとめる
+  - `winocr.ps1` … Windows 標準 OCR の呼び出し
   - `sw.js` … オフライン起動用。アプリを更新したら `CACHE` の版数を上げる

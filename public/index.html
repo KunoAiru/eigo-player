@@ -20,18 +20,43 @@
         <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
       </button>
     </div>
-    <div class="search">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="search" type="search" inputmode="search" autocomplete="off"
-             placeholder="検索: r2 3-4 / 500 / 7週目 / CD3">
-      <button id="clearSearch" class="clear" aria-label="検索をクリア" hidden>×</button>
+    <div class="views" role="tablist">
+      <button role="tab" data-view="audio" aria-selected="true">音声</button>
+      <button role="tab" data-view="words" aria-selected="false">単語帳</button>
     </div>
-    <div id="chips" class="chips" role="tablist"></div>
+    <div id="audioBar">
+      <div class="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="search" type="search" inputmode="search" autocomplete="off"
+               placeholder="検索: r2 3-4 / 500 / 7週目 / CD3">
+        <button id="clearSearch" class="clear" aria-label="検索をクリア" hidden>×</button>
+      </div>
+      <div id="chips" class="chips" role="tablist"></div>
+    </div>
+    <div id="wordsBar" hidden>
+      <div class="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="wordSearch" type="search" inputmode="search" autocomplete="off"
+               placeholder="単語・訳語・番号で検索">
+        <button id="clearWordSearch" class="clear" aria-label="検索をクリア" hidden>×</button>
+      </div>
+      <div id="wordChips" class="chips" role="tablist"></div>
+    </div>
   </header>
 
   <main>
-    <p id="status" class="status"></p>
-    <ul id="list" class="list"></ul>
+    <section id="audioView">
+      <p id="status" class="status"></p>
+      <ul id="list" class="list"></ul>
+    </section>
+    <section id="wordsView" hidden>
+      <div id="studyBar" class="study-bar" hidden>
+        <button id="studyBtn" class="btn">カードで学習</button>
+        <button id="dirBtn" class="btn ghost" aria-label="出題の向き">英 → 日</button>
+      </div>
+      <p id="wordStatus" class="status"></p>
+      <ul id="wordList" class="list"></ul>
+    </section>
   </main>
 
   <button id="jumpNow" class="jump-now" hidden>再生中の音声へ</button>
@@ -42,6 +67,7 @@
         <div id="npTitle" class="np-title">音声を選んでください</div>
         <div id="npSub" class="np-sub"></div>
       </div>
+      <button id="wordsBtn" class="pill" aria-label="この音声の単語" hidden>単語</button>
       <button id="rateBtn" class="pill" aria-label="再生速度">1.0×</button>
       <button id="repeatBtn" class="pill" aria-label="リピート">連続</button>
     </div>
@@ -78,14 +104,24 @@
 
     <section>
       <h3>スマホに音声を取り込む</h3>
-      <p class="note">取り込んだ音声はこの端末に保存され、PC がオフでも再生できます。教材のフォルダ（toefl3800 など）か mp3 ファイルを選んでください。</p>
+      <p class="note">取り込んだ音声はこの端末に保存され、PC がオフでも再生できます。教材のフォルダ（toefl3800 など）、mp3 ファイル、または教材を丸ごとまとめた ZIP ファイルを選んでください。</p>
       <div class="row">
         <label class="btn">フォルダを選ぶ<input id="pickDir" type="file" webkitdirectory multiple hidden></label>
-        <label class="btn">ファイルを選ぶ<input id="pickFiles" type="file" accept="audio/*,.mp3,.m4a" multiple hidden></label>
+        <label class="btn">ファイルを選ぶ<input id="pickFiles" type="file" accept="audio/*,.mp3,.m4a,.zip,application/zip" multiple hidden></label>
       </div>
       <p id="importStatus" class="note"></p>
       <ul id="localBooks" class="local-books"></ul>
       <p id="storageInfo" class="note"></p>
+    </section>
+
+    <section>
+      <h3>単語データを取り込む</h3>
+      <p class="note">tools/ のスクリプトで作った vocab.json を選ぶと、この端末に保存され単語帳で使えます（PC の教材フォルダに置いた場合は自動で読み込まれます）。</p>
+      <div class="row">
+        <label class="btn">vocab.json を選ぶ<input id="pickVocab" type="file" accept=".json,application/json" hidden></label>
+      </div>
+      <p id="vocabStatus" class="note"></p>
+      <ul id="localVocab" class="local-books"></ul>
     </section>
 
     <section id="lanSection" hidden>
@@ -104,6 +140,35 @@
         <li>スペース区切りで AND 検索</li>
       </ul>
     </section>
+  </dialog>
+
+  <dialog id="wordSheet" class="sheet word-sheet">
+    <form method="dialog" class="sheet-head">
+      <h2>単語</h2>
+      <button class="icon-btn" aria-label="閉じる">×</button>
+    </form>
+    <div id="wordSheetBody" class="detail"></div>
+  </dialog>
+
+  <dialog id="cards" class="cards">
+    <div class="cards-head">
+      <button id="cardClose" class="icon-btn" aria-label="閉じる">×</button>
+      <span id="cardProgress" class="card-progress"></span>
+      <button id="cardDir" class="pill" aria-label="出題の向き">英 → 日</button>
+      <button id="cardShuffle" class="pill" aria-label="シャッフル">シャッフル</button>
+    </div>
+    <div id="cardStage" class="card-stage">
+      <div id="card" class="card">
+        <div id="cardFront" class="face front"></div>
+        <div id="cardBack" class="face back detail"></div>
+      </div>
+    </div>
+    <div class="cards-foot">
+      <button id="cardPrev" class="btn ghost">前へ</button>
+      <button id="cardFav" class="star big" aria-label="お気に入り">☆</button>
+      <button id="cardFlip" class="btn ghost">裏返す</button>
+      <button id="cardNext" class="btn">次へ</button>
+    </div>
   </dialog>
 
   <audio id="audio" preload="metadata"></audio>

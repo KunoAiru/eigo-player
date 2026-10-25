@@ -5,3 +5,9 @@ node_modules/
 *.flac
 *.ogg
 *.aac
+
+# Book content made by tools/ (personal use only, never publish)
+vocab.json
+screens/
+pages/
+__pycache__/
