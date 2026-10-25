@@ -459,6 +459,7 @@ function relinkPlaying(trackId) {
 }
 
 async function renderMenu() {
+  $('installHelp').hidden = standalone() || !!installPrompt;
   const local = state.books.filter((b) => b.source === 'local');
   $('localBooks').innerHTML = local.map((b) => `<li><span>${escapeHtml(b.title)}（${b.tracks.length}件）</span><button data-del="${escapeHtml(b.id)}">削除</button></li>`).join('');
   $('localVocab').innerHTML = vocab.localVocabList().map((v) => `<li><span>${escapeHtml(v.title)}（${v.count}語）</span><button data-del-vocab="${escapeHtml(v.title)}">削除</button></li>`).join('');
@@ -630,6 +631,24 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === '/') { e.preventDefault(); $('search').focus(); }
 });
 window.addEventListener('pagehide', () => saveResume(true));
+
+/* ---------------- install as an app ---------------- */
+
+let installPrompt = null;
+const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();  // show our own button instead of the browser's mini bar
+  installPrompt = e;
+  $('installBtn').hidden = false;
+});
+window.addEventListener('appinstalled', () => { installPrompt = null; $('installBtn').hidden = true; });
+$('installBtn').addEventListener('click', async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  await installPrompt.userChoice.catch(() => null);
+  installPrompt = null;
+  $('installBtn').hidden = true;
+});
 
 /* ---------------- start ---------------- */
 

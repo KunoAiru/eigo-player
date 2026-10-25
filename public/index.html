@@ -16,6 +16,7 @@
   <header class="top">
     <div class="top-row">
       <select id="bookSelect" class="book-select" aria-label="教材を選ぶ"></select>
+      <button id="installBtn" class="pill install" hidden>インストール</button>
       <button id="menuBtn" class="icon-btn" aria-label="設定と取り込み">
         <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
       </button>
@@ -122,6 +123,11 @@
       </div>
       <p id="vocabStatus" class="note"></p>
       <ul id="localVocab" class="local-books"></ul>
+    </section>
+
+    <section id="installHelp" hidden>
+      <h3>アプリとして使う</h3>
+      <p class="note">iPhone は Safari の共有ボタン →「ホーム画面に追加」、Android は Chrome のメニュー →「アプリをインストール」でホーム画面に置けます。一度開けばオフラインでも起動します。</p>
     </section>
 
     <section id="lanSection" hidden>
