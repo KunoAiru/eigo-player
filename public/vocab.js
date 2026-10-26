@@ -133,6 +133,8 @@ export function init(h) {
     if (fav) { toggleFav(Number(fav.dataset.fav)); refreshFavButtons(); renderWords(); }
     const play = e.target.closest('[data-play]');
     if (play) { $('wordSheet').close(); hooks.play(hooks.currentBook(), Number(play.dataset.play)); }
+    const study = e.target.closest('[data-study]');
+    if (study) { $('wordSheet').close(); startCardsFrom(Number(study.dataset.study)); }
   });
 
   initCards();
@@ -300,6 +302,7 @@ function openDetail(no) {
     <div class="d-actions">
       <button class="star big" data-fav="${w.no}" aria-pressed="${fav}" aria-label="お気に入り">${fav ? '★' : '☆'}</button>
       ${ti >= 0 ? `<button class="pill" data-play="${ti}">▶ 収録音声を再生${w.cd ? `（CD${escapeHtml(w.cd)}）` : ''}</button>` : ''}
+      <button class="pill" data-study="${w.no}">ここからカードで学習</button>
     </div>
     ${detailHtml(w)}`;
   $('wordSheet').showModal();
@@ -308,7 +311,7 @@ function openDetail(no) {
 
 /* ---------------- flashcards ---------------- */
 
-const cards = { deck: [], order: [], i: 0, flipped: false };
+const cards = { deck: [], order: [], i: 0, flipped: false, sequential: false };
 
 function setDir(dir) {
   ui.dir = dir;
@@ -318,14 +321,28 @@ function setDir(dir) {
 function startCards(words) {
   if (!words.length) return;
   cards.deck = words;
+  cards.sequential = false;
   makeOrder();
+  $('cards').showModal();
+  renderCard();
+}
+
+/** Every word of the book in order, starting at word `no` (runs on across RANKs; 前へ goes back before it). */
+function startCardsFrom(no) {
+  const v = vocab.get(hooks.currentBook()?.title);
+  const start = v ? v.words.findIndex((w) => w.no === no) : -1;
+  if (start < 0) return;
+  cards.deck = v.words;
+  cards.sequential = true;
+  makeOrder();
+  cards.i = start;
   $('cards').showModal();
   renderCard();
 }
 
 function makeOrder() {
   cards.order = cards.deck.map((_, i) => i);
-  if (ui.shuffle) {
+  if (ui.shuffle && !cards.sequential) {
     for (let i = cards.order.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [cards.order[i], cards.order[j]] = [cards.order[j], cards.order[i]];
@@ -409,6 +426,7 @@ function initCards() {
   $('cardShuffle').addEventListener('click', () => {
     ui.shuffle = !ui.shuffle;
     store.set('cardShuffle', ui.shuffle);
+    cards.sequential = false;  // shuffling a "from this word" deck shuffles the whole book
     makeOrder();
     renderCard();
   });

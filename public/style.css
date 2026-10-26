@@ -253,7 +253,8 @@ main { max-width: 720px; margin: 0 auto; }
 .d-ex .en b { color: var(--accent); }
 .d-ex .ja { font-size: 13px; color: var(--muted); margin-top: 2px; }
 .d-note { white-space: pre-wrap; font-size: 14px; margin: 0; }
-.d-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.d-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.d-actions .star { margin-right: auto; }
 .word-sheet { padding-bottom: calc(28px + env(safe-area-inset-bottom)); }
 
 /* flashcards */

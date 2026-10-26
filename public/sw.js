@@ -1,5 +1,5 @@
 // Keeps the app shell available offline. Audio and word data live in IndexedDB (imported) or on the PC server.
-const CACHE = 'player-v4';
+const CACHE = 'player-v5';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'util.js', 'vocab.js', 'zip.js', 'id3.js', 'db.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
