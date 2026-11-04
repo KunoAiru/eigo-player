@@ -24,6 +24,7 @@
     <div class="views" role="tablist">
       <button role="tab" data-view="audio" aria-selected="true">音声</button>
       <button role="tab" data-view="words" aria-selected="false">単語帳</button>
+      <button role="tab" data-view="listen" aria-selected="false">リスニング</button>
     </div>
     <div id="audioBar">
       <div class="search">
@@ -43,6 +44,9 @@
       </div>
       <div id="wordChips" class="chips" role="tablist"></div>
     </div>
+    <div id="listenBar" hidden>
+      <div id="listenChips" class="chips" role="tablist"></div>
+    </div>
   </header>
 
   <main>
@@ -57,6 +61,11 @@
       </div>
       <p id="wordStatus" class="status"></p>
       <ul id="wordList" class="list"></ul>
+    </section>
+    <section id="listenView" hidden>
+      <p id="listenStatus" class="status"></p>
+      <ul id="listenList" class="list"></ul>
+      <p class="note listen-note">YouTube の動画を埋め込みで再生します。イントロと解答キーの部分は自動で飛ばします。YouTube Premium のアカウントでログインしていれば広告は出ません。</p>
     </section>
   </main>
 
@@ -175,6 +184,37 @@
       <button id="cardFlip" class="btn ghost">裏返す</button>
       <button id="cardNext" class="btn">次へ</button>
     </div>
+  </dialog>
+
+  <dialog id="quiz" class="cards quiz">
+    <div class="quiz-head">
+      <button id="quizClose" class="icon-btn" aria-label="閉じる">×</button>
+      <span id="quizTitle" class="quiz-title"></span>
+      <span id="quizScore" class="pill" hidden></span>
+    </div>
+    <div class="quiz-video-wrap">
+      <div id="quizVideo" class="quiz-video"></div>
+      <p id="quizNote" class="quiz-note" hidden></p>
+    </div>
+    <div class="quiz-ctrl">
+      <button id="quizRestart" class="pill" aria-label="最初から">最初から</button>
+      <button id="quizBack" class="ctrl" aria-label="5秒戻す">
+        <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"/><text x="12" y="15.5">5</text></svg>
+      </button>
+      <button id="quizPlay" class="ctrl play" aria-label="再生">
+        <svg viewBox="0 0 24 24" class="i-play"><path d="M8 5v14l11-7z" class="fill"/></svg>
+        <svg viewBox="0 0 24 24" class="i-pause"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" class="fill"/></svg>
+      </button>
+      <button id="quizFwd" class="ctrl" aria-label="5秒進める">
+        <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v4.5h-4.5"/><text x="12" y="15.5">5</text></svg>
+      </button>
+      <button id="quizRate" class="pill" aria-label="再生速度">1×</button>
+    </div>
+    <div class="quiz-sub">
+      <span id="quizTime" class="time"></span>
+      <div id="quizSections" class="chips"></div>
+    </div>
+    <div id="quizSheet" class="quiz-sheet"></div>
   </dialog>
 
   <audio id="audio" preload="metadata"></audio>

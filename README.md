@@ -51,6 +51,24 @@ Windows のファイアウォールの確認が出たら「プライベートネ
 - 音声の一覧の「単語 40」/ 再生中の「単語」ボタン: その音声に収録されている単語だけを表示（本の「CD 1-4」表示で対応づけ）
 - 「カードで学習」: タップで裏返し、英→日 / 日→英、シャッフル、左右スワイプで前後、★登録
 
+## 4. リスニング（TOEFL 2026 形式の練習動画で答え合わせ）
+
+「リスニング」タブで、YouTube の 2 つのプレイリスト（TOEFL Tutor Tatiana の模試 15 本、Tutor Nadeen の形式別 64 本）を解けます。
+
+- 動画は YouTube の埋め込みプレーヤーで再生します（問題文と選択肢は動画の画面に出ます）。イントロは飛ばし、解答キーの手前で自動的に止まります
+- 問題番号ごとに A〜D をタップすると、その場で ○× と正解を表示します。結果は端末に保存され、一覧に「正解数/問題数」が出ます
+- YouTube Premium のアカウントでログインしているブラウザなら広告は出ません（iPhone の Safari ではサイト越えトラッキングの設定によってはログインが認識されないことがあります）
+- 解答キーは各動画の解答画面から読み取ったものです（`tools/listening_keys.json`）。`?` は解答画面が切れていて読めなかった問題（採点しない）、小文字は一部が切れていて推定した解答です
+
+データの作り直し・動画の追加:
+
+```
+node tools/build_listening.mjs
+```
+
+- `YT_API_KEY` 環境変数（または `tools/.youtube_key`）に YouTube Data API v3 のキーがあれば API で、なければ公開ページから、プレイリストの動画・長さ・チャプターを取り直して `public/listening.json` を作ります
+- プレイリストを増やすときはスクリプト冒頭の `PLAYLISTS` に追加。新しい動画は `tools/listening_keys.json` に `"動画ID": {"end": 問題が終わる秒, "groups": [["Questions 1-20", "ABCD…"]]}` を足すと答え合わせできます（必要なら `"start"` で開始秒、チャプターが間違っている動画は `"chapters": false`）
+
 ## ファイル構成
 
 - `server.mjs` … PC 用サーバー（依存なし、Node.js 18+）
@@ -58,6 +76,7 @@ Windows のファイアウォールの確認が出たら「プライベートネ
   - `id3.js` … mp3 タグ（Shift-JIS 対応）の読み取り
   - `db.js` … 端末内保存（IndexedDB、音声と単語データ）
   - `vocab.js` … 単語帳・単語の詳細・フラッシュカード
+  - `listening.js` / `listening.json` … リスニング練習（YouTube 埋め込み・答え合わせ）とそのデータ
 - `tools/` … 単語データ作成（Python 3.10+、Pillow・numpy）
   - `capture.py` … Kindle の自動ページ送りと撮影 / `extract.py` … 読み取り / `build_vocab.py` … vocab.json にまとめる
   - `winocr.ps1` … Windows 標準 OCR の呼び出し

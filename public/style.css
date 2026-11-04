@@ -9,6 +9,10 @@
   --accent-soft: #e4edfc;
   --accent-text: #ffffff;
   --shadow: 0 -6px 24px rgba(0, 0, 0, .08);
+  --ok: #1e8e4e;
+  --ok-soft: #dff3e7;
+  --ng: #d14343;
+  --ng-soft: #fbe3e3;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -23,6 +27,10 @@
     --accent-soft: #233150;
     --accent-text: #0e1420;
     --shadow: 0 -6px 24px rgba(0, 0, 0, .45);
+    --ok: #4cc27f;
+    --ok-soft: #1b3a2a;
+    --ng: #ff7b7b;
+    --ng-soft: #432325;
     color-scheme: dark;
   }
 }
@@ -301,3 +309,65 @@ main { max-width: 720px; margin: 0 auto; }
 .c-backword { font-size: 26px; font-weight: 800; margin-bottom: 6px; }
 
 .pill.install { background: var(--accent); color: var(--accent-text); }
+
+/* ---------- listening ---------- */
+body.view-listen { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+body.view-listen .player, body.view-listen .jump-now { display: none; }
+.lvideo .thumb {
+  flex: none; width: 88px; aspect-ratio: 16 / 9; object-fit: cover;
+  border-radius: 8px; background: var(--surface-2);
+}
+.lvideo .title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 14px; line-height: 1.35; }
+.lbadge {
+  flex: none; padding: 4px 9px; border-radius: 999px; font-size: 12px; font-weight: 700;
+  background: var(--surface-2); color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.lbadge.full { background: var(--ok-soft); color: var(--ok); }
+.listen-note { padding: 4px 16px 0; }
+
+.quiz-head, .quiz-ctrl, .quiz-sub, .quiz-video-wrap, .quiz-sheet { width: 100%; max-width: 720px; margin: 0 auto; }
+.quiz-head { display: flex; align-items: center; gap: 8px; padding: 6px 12px; }
+.quiz-title { flex: 1; min-width: 0; font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quiz-video-wrap { position: relative; flex: none; }
+.quiz-video { aspect-ratio: 16 / 9; background: #000; }
+.quiz-video iframe, .quiz-video #ytPlayer { width: 100%; height: 100%; display: block; border: 0; }
+.quiz-err { margin: 0; height: 100%; display: grid; place-items: center; text-align: center; color: #ddd; font-size: 14px; padding: 16px; }
+.quiz-note {
+  position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); margin: 0;
+  padding: 6px 12px; border-radius: 999px; background: rgba(0,0,0,.75); color: #fff; font-size: 13px; font-weight: 600;
+  pointer-events: none;
+}
+.quiz-ctrl { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 6px 12px 0; }
+.quiz-ctrl .ctrl { width: 48px; height: 48px; }
+.quiz-ctrl .ctrl.play { width: 56px; height: 56px; }
+.quiz-ctrl .pill { min-width: 64px; padding: 8px 10px; }
+.quiz-sub { flex: none; display: flex; align-items: center; gap: 8px; padding: 4px 12px 8px; border-bottom: 1px solid var(--line); }
+.quiz-sub .time { width: auto; flex: none; }
+.quiz-sub .chips { margin: 0; flex: 1; min-width: 0; }
+.quiz-sheet { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 12px 24px; -webkit-overflow-scrolling: touch; }
+.qgroup-head { display: flex; align-items: center; gap: 8px; margin: 14px 0 4px; }
+.qgroup-head h3 { margin: 0; font-size: 15px; }
+.qgroup-score { flex: 1; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.qlist { list-style: none; margin: 0; padding: 0; }
+.qrow {
+  display: grid; grid-template-columns: 30px repeat(4, minmax(0, 1fr)) 26px; align-items: center; gap: 8px;
+  padding: 5px 0; border-top: 1px solid var(--line);
+}
+.qrow:first-child { border-top: 0; }
+.qno { font-size: 13px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.qopt {
+  height: 42px; border-radius: 10px; font-weight: 800; font-size: 16px;
+  background: var(--surface); border: 1.5px solid var(--line); color: var(--text);
+}
+.qopt:not(:disabled):active { background: var(--accent-soft); border-color: var(--accent); }
+.qopt:disabled { cursor: default; color: var(--muted); }
+.qopt.ok { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+.qopt.ng { background: var(--ng-soft); border-color: var(--ng); color: var(--ng); }
+.qopt.picked { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.qmark { font-size: 20px; font-weight: 800; text-align: center; }
+.qmark.ok { color: var(--ok); }
+.qmark.ng { color: var(--ng); }
+.qmark.unk { color: var(--muted); }
+.qunk { grid-column: 2 / -1; font-size: 12px; color: var(--muted); }
+.quiz-foot { margin-top: 18px; padding: 14px; border-radius: 12px; background: var(--surface); text-align: center; }
+.quiz-foot p { margin: 0 0 10px; font-weight: 700; }

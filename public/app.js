@@ -1,6 +1,7 @@
 import { parseID3, id3TagSize } from './id3.js';
 import * as db from './db.js';
 import * as vocab from './vocab.js';
+import * as listening from './listening.js';
 import { unzip } from './zip.js';
 import { $, store, norm, escapeHtml } from './util.js';
 
@@ -655,10 +656,12 @@ $('installBtn').addEventListener('click', async () => {
 (async () => {
   renderNowPlaying();
   $('status').textContent = '読み込み中…';
+  listening.init({ pauseAudio: () => audio.pause() });
   vocab.init({
     books: () => state.books,
     currentBook,
     play: (book, index) => loadTrack(book, index),
+    showListening: () => listening.render(),
   });
   await loadLibrary();
   render();

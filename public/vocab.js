@@ -142,15 +142,20 @@ export function init(h) {
 }
 
 export function setView(view) {
-  ui.view = view === 'words' ? 'words' : 'audio';
+  ui.view = ['words', 'listen'].includes(view) ? view : 'audio';
   store.set('view', ui.view);
   const words = ui.view === 'words';
+  const listen = ui.view === 'listen';
   for (const b of document.querySelectorAll('.views [data-view]')) b.setAttribute('aria-selected', b.dataset.view === ui.view);
-  $('audioBar').hidden = words;
-  $('audioView').hidden = words;
+  $('audioBar').hidden = words || listen;
+  $('audioView').hidden = words || listen;
   $('wordsBar').hidden = !words;
   $('wordsView').hidden = !words;
+  $('listenBar').hidden = !listen;
+  $('listenView').hidden = !listen;
+  document.body.classList.toggle('view-listen', listen);
   if (words) renderWords();
+  if (listen) hooks.showListening?.();
   window.scrollTo(0, 0);
   window.dispatchEvent(new Event('scroll'));  // refresh the "now playing" jump button
 }
