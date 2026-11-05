@@ -1,6 +1,6 @@
 {
-  "name": "英語音声プレーヤー",
-  "short_name": "英語音声",
+  "name": "TOEFL対策アプリ",
+  "short_name": "TOEFL対策アプリ",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

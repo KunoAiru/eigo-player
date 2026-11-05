@@ -1,6 +1,6 @@
-# 英語音声プレーヤー
+# TOEFL対策アプリ
 
-教材の音声（mp3）を検索してすぐ再生できるスマホ向け Web アプリ（PWA）です。
+教材の音声（mp3）の再生、単語帳、イディオム帳、リスニング練習ができるスマホ向け Web アプリ（PWA）です。
 
 - 検索: `r2 3-4`（RANK2 3週目4日）、`500`（単語番号 500 を含むトラック）、`7週目`、`cd3` など。スペース区切りで AND 検索、Enter で先頭を再生
 - 前/次、10秒戻し/送り、シークバー、再生速度、連続・1曲リピート・1曲で停止
@@ -69,6 +69,14 @@ node tools/build_listening.mjs
 - `YT_API_KEY` 環境変数（または `tools/.youtube_key`）に YouTube Data API v3 のキーがあれば API で、なければ公開ページから、プレイリストの動画・長さ・チャプターを取り直して `public/listening.json` を作ります
 - プレイリストを増やすときはスクリプト冒頭の `PLAYLISTS` に追加。新しい動画は `tools/listening_keys.json` に `"動画ID": {"end": 問題が終わる秒, "groups": [["Questions 1-20", "ABCD…"]]}` を足すと答え合わせできます（必要なら `"start"` で開始秒、チャプターが間違っている動画は `"chapters": false`）
 
+## 5. イディオム
+
+「イディオム」タブで、英語イディオム 1,539 件（和訳つき）を一覧・検索・カードで学習できます。
+
+- 頭文字（A〜Y）で絞り込み、★お気に入り、検索（英語・訳語・番号）
+- 「カードで学習」: タップで裏返し、英→日 / 日→英、シャッフル、左右スワイプで前後
+- データは `public/idioms.json`（`{no, word, group, senses: [{meanings: [和訳]}]}`）。アプリに同梱しているのでオフラインでも使えます
+
 ## ファイル構成
 
 - `server.mjs` … PC 用サーバー（依存なし、Node.js 18+）
@@ -76,6 +84,7 @@ node tools/build_listening.mjs
   - `id3.js` … mp3 タグ（Shift-JIS 対応）の読み取り
   - `db.js` … 端末内保存（IndexedDB、音声と単語データ）
   - `vocab.js` … 単語帳・単語の詳細・フラッシュカード
+  - `idioms.json` … イディオムと和訳（イディオムタブ）
   - `listening.js` / `listening.json` … リスニング練習（YouTube 埋め込み・答え合わせ）とそのデータ
 - `tools/` … 単語データ作成（Python 3.10+、Pillow・numpy）
   - `capture.py` … Kindle の自動ページ送りと撮影 / `extract.py` … 読み取り / `build_vocab.py` … vocab.json にまとめる

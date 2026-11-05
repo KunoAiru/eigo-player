@@ -5,6 +5,9 @@ import { $, store, norm, escapeHtml } from './util.js';
 import * as db from './db.js';
 
 const vocab = new Map();   // book title -> {words, byNo, byCd, source}
+// Built-in idiom deck (public/idioms.json), independent of the selected audio book.
+const IDIOMS = 'イディオム';
+let idioms = null;
 let hooks = null;          // {currentBook(), books(), play(book, index)}
 const ui = {
   view: store.get('view', 'audio'),
@@ -45,6 +48,10 @@ const refWord = (r) => (typeof r === 'string' ? r : r.word);
 
 export async function loadVocab(books) {
   vocab.clear();
+  idioms ??= await fetch('idioms.json', { cache: 'no-cache' })
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data) => (data ? prepare(data, 'builtin') : null))
+    .catch(() => null);
   for (const rec of await db.getAllVocab().catch(() => [])) vocab.set(rec.title, prepare(rec.data, 'local'));
   // A copy saved on the phone wins, like the audio does.
   await Promise.all(books.filter((b) => b.vocabUrl && !vocab.has(b.title)).map(async (b) => {
@@ -94,6 +101,16 @@ export const localVocabList = () => [...vocab.entries()]
 
 /* ---------------- views ---------------- */
 
+const isIdioms = () => ui.view === 'idioms';
+const unit = () => (isIdioms() ? '件' : '語');
+
+/** The word list shown now: the idiom deck on the イディオム tab, otherwise the current book's words. */
+function deck() {
+  if (isIdioms()) return { title: IDIOMS, v: idioms, book: null };
+  const book = hooks?.currentBook();
+  return { title: book?.title, v: book ? vocab.get(book.title) : null, book };
+}
+
 export function init(h) {
   hooks = h;
   document.querySelector('.views').addEventListener('click', (e) => {
@@ -142,9 +159,18 @@ export function init(h) {
 }
 
 export function setView(view) {
-  ui.view = ['words', 'listen'].includes(view) ? view : 'audio';
+  const prev = ui.view;
+  ui.view = ['words', 'idioms', 'listen'].includes(view) ? view : 'audio';
   store.set('view', ui.view);
-  const words = ui.view === 'words';
+  const words = ui.view === 'words' || ui.view === 'idioms';
+  if (words && prev !== ui.view) {
+    // 単語帳 and イディオム share the search box and chips; start each fresh.
+    ui.chip = 'all';
+    ui.query = '';
+    $('wordSearch').value = '';
+    $('clearWordSearch').hidden = true;
+  }
+  $('wordSearch').placeholder = isIdioms() ? 'イディオム・訳語・番号で検索' : '単語・訳語・番号で検索';
   const listen = ui.view === 'listen';
   for (const b of document.querySelectorAll('.views [data-view]')) b.setAttribute('aria-selected', b.dataset.view === ui.view);
   $('audioBar').hidden = words || listen;
@@ -176,56 +202,60 @@ function currentTrack() {
 }
 
 function visibleWords() {
-  const book = hooks.currentBook();
-  const v = book && vocab.get(book.title);
+  const { title, v, book } = deck();
   if (!v) return [];
-  const t = currentTrack();
+  const t = isIdioms() ? null : currentTrack();
   let list = t ? wordsForTrack(book, t) : v.words;
-  if (ui.chip === 'fav') list = list.filter((w) => favs.has(favKey(book.title, w.no)));
+  if (ui.chip === 'fav') list = list.filter((w) => favs.has(favKey(title, w.no)));
   else if (ui.chip.startsWith('rank:')) list = list.filter((w) => String(w.rank) === ui.chip.slice(5));
+  else if (ui.chip.startsWith('group:')) list = list.filter((w) => w.group === ui.chip.slice(6));
   const tokens = norm(ui.query).split(' ').filter(Boolean);
   if (tokens.length) list = list.filter((w) => tokens.every((tok) => w.search.includes(tok)));
   return list;
 }
 
 export function renderWords() {
-  if (!hooks || ui.view !== 'words') return;
-  const book = hooks.currentBook();
-  const v = book && vocab.get(book.title);
+  if (!hooks || !['words', 'idioms'].includes(ui.view)) return;
+  const { title, v } = deck();
   const chips = $('wordChips');
   if (!v) {
     chips.innerHTML = '';
     $('studyBar').hidden = true;
     $('wordStatus').textContent = '';
-    $('wordList').innerHTML = `<li class="empty">この教材の単語データがまだありません。<br>
+    $('wordList').innerHTML = isIdioms()
+      ? '<li class="empty">イディオムのデータを読み込めませんでした。<br>インターネットにつながる状態でアプリを開き直してください。</li>'
+      : `<li class="empty">この教材の単語データがまだありません。<br>
       PC で tools/ のスクリプトを使って vocab.json を作り、教材フォルダに置くか、<br>右上のメニューの「単語データを取り込む」から読み込んでください。</li>`;
     return;
   }
-  const t = currentTrack();
+  const t = isIdioms() ? null : currentTrack();
   const ranks = [...new Set(v.words.map((w) => w.rank).filter(Boolean))].sort((a, b) => a - b);
-  const favCount = v.words.filter((w) => favs.has(favKey(book.title, w.no))).length;
+  const groups = [...new Set(v.words.map((w) => w.group).filter(Boolean))];
+  const favCount = v.words.filter((w) => favs.has(favKey(title, w.no))).length;
   const chip = (value, label) => `<button class="chip" role="tab" data-chip="${value}" aria-selected="${ui.chip === value}">${escapeHtml(label)}</button>`;
   chips.innerHTML = [
     t ? `<button class="chip track" data-chip="track" aria-selected="true" aria-label="トラックの絞り込みを解除">▶ ${escapeHtml(t.title)} ×</button>` : '',
     chip('all', 'すべて'),
     chip('fav', `★ お気に入り ${favCount}`),
     ...(ranks.length > 1 ? ranks.map((r) => chip(`rank:${r}`, `RANK${r}`)) : []),
+    ...(groups.length > 1 ? groups.map((g) => chip(`group:${g}`, g)) : []),
   ].join('');
   renderWordList();
 }
 
 function renderWordList() {
-  const book = hooks.currentBook();
+  const { title, v } = deck();
   const list = visibleWords();
-  const total = vocab.get(book?.title)?.words.length || 0;
-  $('wordStatus').textContent = list.length === total ? `全 ${total} 語` : `${list.length} 語 / 全 ${total} 語`;
+  const total = v?.words.length || 0;
+  const u = unit();
+  $('wordStatus').textContent = list.length === total ? `全 ${total} ${u}` : `${list.length} ${u} / 全 ${total} ${u}`;
   renderStudyBar(list.length);
   if (!list.length) {
     $('wordList').innerHTML = `<li class="empty">${ui.chip === 'fav' ? 'お気に入りはまだありません。単語の ☆ をタップして登録できます。' : '見つかりませんでした'}</li>`;
     return;
   }
   $('wordList').innerHTML = list.map((w) => {
-    const fav = favs.has(favKey(book.title, w.no));
+    const fav = favs.has(favKey(title, w.no));
     return `<li class="item word" data-no="${w.no}">
       <span class="num">${w.no ?? ''}</span>
       <span class="txt"><div class="title">${escapeHtml(w.word)}</div><div class="sub">${escapeHtml(summary(w))}</div></span>
@@ -236,7 +266,7 @@ function renderWordList() {
 
 function renderStudyBar(count = visibleWords().length) {
   $('studyBar').hidden = false;
-  $('studyBtn').textContent = `カードで学習（${count} 語）`;
+  $('studyBtn').textContent = `カードで学習（${count} ${unit()}）`;
   $('studyBtn').disabled = !count;
   $('dirBtn').textContent = ui.dir === 'en' ? '英 → 日' : '日 → 英';
 }
@@ -244,7 +274,7 @@ function renderStudyBar(count = visibleWords().length) {
 const summary = (w) => w.senses.map((s) => `${s.pos ? `${s.pos} ` : ''}${s.meanings.join('，')}`).join('　') || '（訳語なし）';
 
 function toggleFav(no) {
-  const title = hooks.currentBook()?.title;
+  const { title } = deck();
   if (!title) return;
   const key = favKey(title, no);
   if (favs.has(key)) favs.delete(key); else favs.add(key);
@@ -252,7 +282,7 @@ function toggleFav(no) {
 }
 
 function refreshFavButtons() {
-  const title = hooks.currentBook()?.title;
+  const { title } = deck();
   for (const b of document.querySelectorAll('dialog [data-fav]')) {
     const on = favs.has(favKey(title, Number(b.dataset.fav)));
     b.setAttribute('aria-pressed', on);
@@ -298,11 +328,11 @@ function detailHtml(w, { head = true } = {}) {
 }
 
 function openDetail(no) {
-  const book = hooks.currentBook();
-  const w = vocab.get(book?.title)?.byNo.get(no);
+  const { title, v, book } = deck();
+  const w = v?.byNo.get(no);
   if (!w) return;
-  const fav = favs.has(favKey(book.title, w.no));
-  const ti = trackForWord(book, w);
+  const fav = favs.has(favKey(title, w.no));
+  const ti = book ? trackForWord(book, w) : -1;
   $('wordSheetBody').innerHTML = `
     <div class="d-actions">
       <button class="star big" data-fav="${w.no}" aria-pressed="${fav}" aria-label="お気に入り">${fav ? '★' : '☆'}</button>
@@ -334,7 +364,7 @@ function startCards(words) {
 
 /** Every word of the book in order, starting at word `no` (runs on across RANKs; 前へ goes back before it). */
 function startCardsFrom(no) {
-  const v = vocab.get(hooks.currentBook()?.title);
+  const { v } = deck();
   const start = v ? v.words.findIndex((w) => w.no === no) : -1;
   if (start < 0) return;
   cards.deck = v.words;
@@ -362,7 +392,7 @@ const cardWord = () => cards.deck[cards.order[cards.i]];
 function renderCard() {
   const w = cardWord();
   if (!w) return;
-  const title = hooks.currentBook()?.title;
+  const { title } = deck();
   const front = ui.dir === 'en'
     ? `<div class="c-word">${escapeHtml(w.word)}</div>${w.pron ? `<div class="d-pron">[${escapeHtml(w.pron)}]</div>` : ''}`
     : `<ul class="c-ja">${w.senses.map((s) => `<li>${posBox(s.pos)}<span>${escapeHtml(s.meanings.join('，'))}</span></li>`).join('') || '<li>（訳語なし）</li>'}</ul>`;
@@ -370,6 +400,7 @@ function renderCard() {
   $('cardFront').innerHTML = `<div class="c-no">${w.no ?? ''}</div><div class="c-center">${front}</div><div class="c-hint">タップで裏返す</div>`;
   $('cardBack').innerHTML = `${ui.dir === 'en' ? `<div class="c-backword">${escapeHtml(w.word)}</div>` : ''}${back}`;
   $('cardBack').scrollTop = 0;
+  $('cards').classList.toggle('idiom', isIdioms());
   $('card').classList.toggle('flipped', cards.flipped);
   $('cardProgress').textContent = `${cards.i + 1} / ${cards.order.length}`;
   const fav = favs.has(favKey(title, w.no));

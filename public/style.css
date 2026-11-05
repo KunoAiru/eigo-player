@@ -307,6 +307,9 @@ main { max-width: 720px; margin: 0 auto; }
 .c-ja li { display: flex; align-items: baseline; gap: 8px; font-size: 20px; font-weight: 700; }
 .c-hint { text-align: center; font-size: 12px; color: var(--muted); }
 .c-backword { font-size: 26px; font-weight: 800; margin-bottom: 6px; }
+/* Idiom cards: phrases are long and the answer is a single translation, so size them for reading. */
+.cards.idiom .c-word { font-size: clamp(26px, 8vw, 40px); }
+.cards.idiom .d-senses .m { font-size: 22px; line-height: 1.5; }
 
 .pill.install { background: var(--accent); color: var(--accent-text); }
 
