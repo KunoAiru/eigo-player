@@ -2,6 +2,10 @@ import { parseID3, id3TagSize } from './id3.js';
 import * as db from './db.js';
 import * as vocab from './vocab.js';
 import * as listening from './listening.js';
+import * as drill from './drill.js';
+import * as shadow from './shadow.js';
+import * as speech from './speech.js';
+import { initWordPopup } from './sentences.js';
 import { unzip } from './zip.js';
 import { $, store, norm, escapeHtml } from './util.js';
 
@@ -461,6 +465,7 @@ function relinkPlaying(trackId) {
 
 async function renderMenu() {
   $('installHelp').hidden = standalone() || !!installPrompt;
+  renderVoices();
   const local = state.books.filter((b) => b.source === 'local');
   $('localBooks').innerHTML = local.map((b) => `<li><span>${escapeHtml(b.title)}（${b.tracks.length}件）</span><button data-del="${escapeHtml(b.id)}">削除</button></li>`).join('');
   $('localVocab').innerHTML = vocab.localVocabList().map((v) => `<li><span>${escapeHtml(v.title)}（${v.count}語）</span><button data-del-vocab="${escapeHtml(v.title)}">削除</button></li>`).join('');
@@ -626,12 +631,71 @@ window.addEventListener('scroll', () => {
 
 document.addEventListener('keydown', (e) => {
   if (e.target.closest('input, select, textarea, dialog[open]')) return;
+  if (document.body.classList.contains('view-practice')) return;  // drill.js / shadow.js own the keys there
   if (e.key === ' ') { e.preventDefault(); togglePlay(); }
   else if (e.key === 'ArrowLeft') skip(-10);
   else if (e.key === 'ArrowRight') skip(10);
   else if (e.key === '/') { e.preventDefault(); $('search').focus(); }
 });
 window.addEventListener('pagehide', () => saveResume(true));
+
+/* ---------------- speaking practice, voices, my words ---------------- */
+
+let toastTimer = 0;
+function toast(text) {
+  const el = $('toast');
+  el.textContent = text;
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.hidden = true; }, 2200);
+}
+
+function onView(view, prev) {
+  if (prev === 'drill') drill.hide();
+  if (prev === 'shadow') shadow.hide();
+  if (view === 'drill' || view === 'shadow') audio.pause();
+  if (view === 'drill') drill.show();
+  if (view === 'shadow') shadow.show();
+}
+
+function renderVoices() {
+  const sel = $('ttsVoice');
+  const voices = speech.englishVoices();
+  const cur = speech.currentVoice();
+  sel.innerHTML = voices.length
+    ? voices.map((v) => `<option value="${escapeHtml(v.voiceURI)}">${escapeHtml(v.name)}（${escapeHtml(v.lang)}）</option>`).join('')
+    : `<option>${speech.ttsSupported ? '英語の声が見つかりません' : 'このブラウザは読み上げに対応していません'}</option>`;
+  sel.disabled = !voices.length;
+  if (cur) sel.value = cur.voiceURI;
+}
+speech.onVoicesChanged(renderVoices);
+$('ttsVoice').addEventListener('change', (e) => speech.setVoice(e.target.value));
+$('ttsTest').addEventListener('click', () => { audio.pause(); speech.speak('Practice makes perfect. Let\'s keep going!'); });
+
+$('mineExport').addEventListener('click', () => {
+  const data = vocab.exportMine();
+  const blob = new Blob([JSON.stringify({ type: 'my-words', words: data }, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `my-words-${new Date().toLocaleDateString('sv')}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  $('mineStatus').textContent = `${data.length} 語を書き出しました`;
+});
+$('mineImport').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    const list = Array.isArray(data) ? data : data.words;
+    if (!Array.isArray(list)) throw new Error('マイ単語のファイルではありません');
+    const { added, skipped } = vocab.importMine(list);
+    $('mineStatus').textContent = `${added} 語を追加しました${skipped ? `（重複など ${skipped} 語はスキップ）` : ''}`;
+  } catch (err) {
+    $('mineStatus').textContent = `読み込めませんでした: ${err?.message || err}`;
+  }
+});
 
 /* ---------------- install as an app ---------------- */
 
@@ -657,11 +721,18 @@ $('installBtn').addEventListener('click', async () => {
   renderNowPlaying();
   $('status').textContent = '読み込み中…';
   listening.init({ pauseAudio: () => audio.pause() });
+  const pauseAudio = () => audio.pause();
+  initWordPopup({ pauseAudio });
+  drill.init({ pauseAudio, openShadow: async (s) => { await shadow.openSentence(s); vocab.setView('shadow'); } });
+  shadow.init({ pauseAudio, toast });
   vocab.init({
     books: () => state.books,
     currentBook,
     play: (book, index) => loadTrack(book, index),
     showListening: () => listening.render(),
+    pauseAudio,
+    onView,
+    toast,
   });
   await loadLibrary();
   render();

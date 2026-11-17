@@ -12,3 +12,4 @@ screens/
 pages/
 __pycache__/
 tools/.youtube_key
+tools/.tatoeba/

@@ -26,6 +26,8 @@
       <button role="tab" data-view="words" aria-selected="false">単語帳</button>
       <button role="tab" data-view="idioms" aria-selected="false">イディオム</button>
       <button role="tab" data-view="listen" aria-selected="false">リスニング</button>
+      <button role="tab" data-view="drill" aria-selected="false">瞬間英作文</button>
+      <button role="tab" data-view="shadow" aria-selected="false">シャドーイング</button>
     </div>
     <div id="audioBar">
       <div class="search">
@@ -59,6 +61,7 @@
       <div id="studyBar" class="study-bar" hidden>
         <button id="studyBtn" class="btn">カードで学習</button>
         <button id="dirBtn" class="btn ghost" aria-label="出題の向き">英 → 日</button>
+        <button id="addWordBtn" class="btn ghost" aria-label="マイ単語に追加">＋ 追加</button>
       </div>
       <p id="wordStatus" class="status"></p>
       <ul id="wordList" class="list"></ul>
@@ -67,6 +70,88 @@
       <p id="listenStatus" class="status"></p>
       <ul id="listenList" class="list"></ul>
       <p class="note listen-note">YouTube の動画を埋め込みで再生します。イントロと解答キーの部分は自動で飛ばします。YouTube Premium のアカウントでログインしていれば広告は出ません。</p>
+    </section>
+
+    <section id="drillView" class="practice" hidden>
+      <div class="p-opts">
+        <div id="drillLevel" class="seg" aria-label="レベル"></div>
+        <div id="drillSec" class="seg" aria-label="制限時間"></div>
+      </div>
+      <div id="drillCard" class="p-card">
+        <div class="p-meta"><span id="drillMeta"></span><a id="drillSrc" target="_blank" rel="noopener"></a></div>
+        <div class="p-timer"><i id="drillBar"></i></div>
+        <p id="drillJa" class="p-ja">「スタート」で始めます。日本語が出たら、時間内に英語で声に出して言ってみましょう。</p>
+        <div id="drillAns" class="p-en" hidden></div>
+        <p id="drillAlts" class="p-alts" hidden></p>
+      </div>
+      <div class="p-actions">
+        <button id="drillStart" class="btn big">スタート</button>
+        <button id="drillReveal" class="btn big ghost" hidden>答えを見る</button>
+        <button id="drillNg" class="btn big ng" hidden>× 言えなかった</button>
+        <button id="drillOk" class="btn big ok" hidden>○ 言えた</button>
+      </div>
+      <div class="p-tools">
+        <button id="drillReplay" class="pill" hidden>🔊 もう一度</button>
+        <button id="drillToShadow" class="pill" hidden>この文をシャドーイング</button>
+        <label class="toggle"><input type="checkbox" id="drillSpeak"> 答えを読み上げ</label>
+      </div>
+      <p id="drillStats" class="note p-note"></p>
+      <p class="note p-note">英文の単語をタップすると意味の確認・マイ単語への追加ができます。PC では Space = 答え／言えた、X = 言えなかった、R = もう一度。<br>例文: <a href="https://tatoeba.org" target="_blank" rel="noopener">Tatoeba</a>（CC BY 2.0 FR）</p>
+    </section>
+
+    <section id="shadowView" class="practice" hidden>
+      <div class="p-opts">
+        <div id="shadowLevel" class="seg" aria-label="教材"></div>
+      </div>
+      <details id="customBox" class="custom-box">
+        <summary>英文を貼り付けて練習（ニュース記事・スクリプトなど）</summary>
+        <textarea id="customText" rows="5" placeholder="英文を貼り付けると 1 文ずつに分けて練習できます"></textarea>
+        <div class="row"><button id="customUse" class="btn">この英文で練習</button></div>
+        <p class="note">おすすめ: <a href="https://learningenglish.voanews.com" target="_blank" rel="noopener">VOA Learning English</a>（ゆっくりした英語のニュース。米国政府の著作物でパブリックドメイン）の記事本文など。</p>
+      </details>
+      <div class="p-nav">
+        <button id="shPrev" class="icon-btn" aria-label="前の文">‹</button>
+        <span id="shPos" class="p-pos"></span>
+        <button id="shRandom" class="pill">ランダム</button>
+        <button id="shNext" class="icon-btn" aria-label="次の文">›</button>
+      </div>
+      <div id="shSteps" class="chips steps" role="tablist" aria-label="練習のステップ"></div>
+      <p id="shHow" class="p-how"></p>
+      <div class="p-card">
+        <div class="p-meta"><span id="shMeta"></span><a id="shSrc" target="_blank" rel="noopener"></a></div>
+        <div id="shText" class="p-en"></div>
+        <p id="shJa" class="p-ja small"></p>
+        <button id="shPeek" class="pill">英文を表示</button>
+        <div id="shCloze" class="p-cloze" hidden>
+          <div id="shRatio" class="seg small" aria-label="穴の数"></div>
+          <div class="row">
+            <button id="shGrade" class="btn">答え合わせ</button>
+            <button id="shRemake" class="btn ghost">穴を作り直す</button>
+          </div>
+        </div>
+        <div id="shResult" class="p-result" hidden></div>
+      </div>
+      <div class="p-actions">
+        <button id="shPlay" class="btn big">▶ 再生</button>
+      </div>
+      <p id="shPlayInfo" class="p-playinfo"></p>
+      <div class="p-ctrl">
+        <label>速度 <input type="range" id="shRate" min="0.5" max="1.3" step="0.05"> <span id="shRateVal" class="mono"></span></label>
+        <label>回数 <select id="shReps"><option>1</option><option>2</option><option>3</option><option>5</option><option>10</option></select></label>
+        <label class="toggle"><input type="checkbox" id="shGap"> 間をあける（リピーティング）</label>
+        <label class="toggle"><input type="checkbox" id="shAuto"> 終わったら次のステップへ</label>
+      </div>
+      <div class="p-tools">
+        <button id="shRec" class="btn ghost">🎙 録音</button>
+        <button id="shMine" class="pill" hidden>▶ 自分の声</button>
+        <button id="shCompare" class="pill" hidden>▶ お手本 → 自分の声</button>
+        <button id="shSpeak" class="btn ghost">🗣 発音チェック</button>
+      </div>
+      <div class="p-tools">
+        <label class="toggle"><input type="checkbox" id="shRecModel"> 録音中にお手本を流す（イヤホン推奨）</label>
+      </div>
+      <p id="shToolsNote" class="note p-note"></p>
+      <p class="note p-note">①〜⑥を順に進めます。長時間より毎日 10〜15 分ずつ続けるのがコツ。8〜9 割聞き取れるレベルの文を選びましょう。単語をタップで意味の確認・マイ単語への追加。PC では Space = 再生／停止、← → = 前後の文。<br>例文: <a href="https://tatoeba.org" target="_blank" rel="noopener">Tatoeba</a>（CC BY 2.0 FR）。音声はブラウザ内蔵の読み上げ（無料）です。</p>
     </section>
   </main>
 
@@ -133,6 +218,25 @@
       </div>
       <p id="vocabStatus" class="note"></p>
       <ul id="localVocab" class="local-books"></ul>
+    </section>
+
+    <section>
+      <h3>読み上げの声（瞬間英作文・シャドーイング）</h3>
+      <p class="note">ブラウザ内蔵の無料の読み上げを使います。Edge の「Natural」、Chrome の「Google」の声が自然です。iPhone は 設定 → アクセシビリティ → 読み上げコンテンツ → 声 で高品質な英語の声を追加できます。</p>
+      <div class="row">
+        <select id="ttsVoice" class="select" aria-label="読み上げの声"></select>
+        <button id="ttsTest" class="btn ghost">試聴</button>
+      </div>
+    </section>
+
+    <section>
+      <h3>マイ単語のバックアップ</h3>
+      <p class="note">自分で追加した単語はこの端末（ブラウザ）に保存されます。書き出したファイルを別の端末で読み込めます（単語帳にすでにある単語は読み込みません）。</p>
+      <div class="row">
+        <button id="mineExport" class="btn ghost">書き出す</button>
+        <label class="btn ghost">読み込む<input id="mineImport" type="file" accept=".json,application/json" hidden></label>
+      </div>
+      <p id="mineStatus" class="note"></p>
     </section>
 
     <section id="installHelp" hidden>
@@ -217,6 +321,36 @@
     </div>
     <div id="quizSheet" class="quiz-sheet"></div>
   </dialog>
+
+  <dialog id="addWordSheet" class="sheet">
+    <form id="addWordForm" class="add-form">
+      <div class="sheet-head">
+        <h2 id="addWordTitle">マイ単語に追加</h2>
+        <button type="button" id="addWordCancel" class="icon-btn" aria-label="閉じる">×</button>
+      </div>
+      <label>英単語・フレーズ<input name="word" required autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      <p id="addWordMsg" class="add-msg" aria-live="polite"></p>
+      <label>意味<input name="meaning" autocomplete="off" placeholder="複数あるときは「、」で区切る"></label>
+      <label>例文（英語）<input name="exEn" autocomplete="off"></label>
+      <label>例文の訳<input name="exJa" autocomplete="off"></label>
+      <label>メモ<textarea name="note" rows="2"></textarea></label>
+      <div class="row"><button id="addWordSave" class="btn">追加</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="wordPop" class="sheet word-pop">
+    <div class="sheet-head">
+      <h2 id="wordPopWord"></h2>
+      <button id="wordPopClose" class="icon-btn" aria-label="閉じる">×</button>
+    </div>
+    <p id="wordPopMeaning" class="pop-meaning"></p>
+    <div class="row">
+      <button id="wordPopSay" class="btn ghost">🔊 読み上げ</button>
+      <button id="wordPopAdd" class="btn">＋ マイ単語に追加</button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden></div>
 
   <audio id="audio" preload="metadata"></audio>
   <script type="module" src="app.js"></script>

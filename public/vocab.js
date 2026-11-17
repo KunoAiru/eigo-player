@@ -3,11 +3,19 @@
 // it is never part of the published app.
 import { $, store, norm, escapeHtml } from './util.js';
 import * as db from './db.js';
+import { speak } from './speech.js';
 
 const vocab = new Map();   // book title -> {words, byNo, byCd, source}
 // Built-in idiom deck (public/idioms.json), independent of the selected audio book.
 const IDIOMS = 'イディオム';
 let idioms = null;
+// Words the user adds themselves, kept on this device: {no, word, meaning, exEn, exJa, note, added}.
+const MINE = 'マイ単語';
+let mineRecs = store.get('myWords', []);
+if (!Array.isArray(mineRecs)) mineRecs = [];
+mineRecs = mineRecs.filter((r) => r && typeof r.word === 'string' && r.word.trim());
+let mine = null;
+const VIEWS = ['audio', 'words', 'idioms', 'listen', 'drill', 'shadow'];
 let hooks = null;          // {currentBook(), books(), play(book, index)}
 const ui = {
   view: store.get('view', 'audio'),
@@ -45,6 +53,83 @@ function prepare(data, source) {
 }
 
 const refWord = (r) => (typeof r === 'string' ? r : r.word);
+
+/* ---------------- my words (added by the user) ---------------- */
+
+const str = (v) => (v == null ? '' : String(v));
+const mineWord = (r) => ({
+  no: r.no,
+  word: str(r.word),
+  senses: r.meaning ? [{ pos: '', meanings: str(r.meaning).split(/\s*[、，,;；]\s*/).filter(Boolean) }] : [],
+  examples: r.exEn ? [{ en: str(r.exEn), ja: str(r.exJa) }] : [],
+  note: str(r.note),
+});
+
+function rebuildMine() {
+  mine = prepare({ words: mineRecs.map(mineWord) }, 'mine');
+}
+rebuildMine();
+
+function saveMine() {
+  store.set('myWords', mineRecs);
+  rebuildMine();
+}
+
+/** Spelling key for duplicates: case, width, curly quotes and trailing punctuation don't count. */
+const wordKey = (s) => norm(s).replace(/[’‘]/g, "'").replace(/[\s.!?。、,]+$/, '').replace(/^[\s"'“”]+|[\s"'“”]+$/g, '');
+
+/** Where a word already is: my words first, then each book's word list, then the idioms. */
+export function findWord(word, { except } = {}) {
+  const k = wordKey(word);
+  if (!k) return null;
+  const hit = (title, v) => {
+    const w = v?.words.find((x) => wordKey(x.word) === k && !(title === MINE && x.no === except));
+    return w ? { title, w } : null;
+  };
+  return hit(MINE, mine) || [...vocab].map(([t, v]) => hit(t, v)).find(Boolean) || hit(IDIOMS, idioms);
+}
+
+/** Like findWord, but also tries the base form of an inflected word (studies → study, made → …). */
+export function lookupWord(word) {
+  const w = wordKey(word);
+  const tries = [w, w.replace(/'s$/, ''), w.replace(/ies$/, 'y'), w.replace(/ied$/, 'y'), w.replace(/es$/, ''),
+    w.replace(/s$/, ''), w.replace(/ed$/, ''), w.replace(/d$/, ''), w.replace(/ing$/, ''), w.replace(/ing$/, 'e'),
+    w.replace(/([a-z])\1(ed|ing)$/, '$1'), w.replace(/er$/, ''), w.replace(/est$/, ''), w.replace(/ly$/, '')];
+  for (const t of new Set(tries)) {
+    if (t.length < 2) continue;
+    const hit = findWord(t);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+export const summaryOf = (w) => summary(w);
+export const mineCount = () => mineRecs.length;
+
+function addMine(rec) {
+  // Numbers are never reused, so a deleted word's ★ doesn't pass to a new one.
+  const no = Math.max(store.get('myWordsNext', 1), ...mineRecs.map((r) => (Number(r.no) || 0) + 1));
+  store.set('myWordsNext', no + 1);
+  mineRecs.unshift({ ...rec, no, added: Date.now() });
+  saveMine();
+  return no;
+}
+
+/** Merges words from a backup file; words already in the word book are skipped. */
+export function importMine(list) {
+  let added = 0;
+  let skipped = 0;
+  for (const r of list) {
+    const word = str(r?.word).trim();
+    if (!word || findWord(word)) { skipped++; continue; }
+    addMine({ word, meaning: str(r.meaning).trim(), exEn: str(r.exEn).trim(), exJa: str(r.exJa).trim(), note: str(r.note).trim() });
+    added++;
+  }
+  renderWords();
+  return { added, skipped };
+}
+
+export const exportMine = () => mineRecs.map(({ word, meaning, exEn, exJa, note, added }) => ({ word, meaning, exEn, exJa, note, added }));
 
 export async function loadVocab(books) {
   vocab.clear();
@@ -103,12 +188,19 @@ export const localVocabList = () => [...vocab.entries()]
 
 const isIdioms = () => ui.view === 'idioms';
 const unit = () => (isIdioms() ? '件' : '語');
+const bookDeck = () => {
+  const book = hooks?.currentBook();
+  const v = book ? vocab.get(book.title) : null;
+  return v?.words.length ? { title: book.title, v, book } : null;
+};
+// マイ単語 is shown when picked, and always when the book has no word data (e.g. on the hosted app).
+const isMine = () => ui.view === 'words' && (ui.chip === 'mine' || !bookDeck());
 
-/** The word list shown now: the idiom deck on the イディオム tab, otherwise the current book's words. */
+/** The word list shown now: the idiom deck, my words, or the current book's words. */
 function deck() {
   if (isIdioms()) return { title: IDIOMS, v: idioms, book: null };
-  const book = hooks?.currentBook();
-  return { title: book?.title, v: book ? vocab.get(book.title) : null, book };
+  if (isMine()) return { title: MINE, v: mine, book: null };
+  return bookDeck() || { title: null, v: null, book: null };
 }
 
 export function init(h) {
@@ -142,6 +234,8 @@ export function init(h) {
     if (row) openDetail(Number(row.dataset.no));
   });
   $('studyBtn').addEventListener('click', () => startCards(visibleWords()));
+  $('addWordBtn').addEventListener('click', () => openAddWord());
+  initAddWord();
   $('dirBtn').addEventListener('click', () => { setDir(ui.dir === 'en' ? 'ja' : 'en'); renderStudyBar(); });
 
   $('wordSheet').addEventListener('click', (e) => {
@@ -152,15 +246,32 @@ export function init(h) {
     if (play) { $('wordSheet').close(); hooks.play(hooks.currentBook(), Number(play.dataset.play)); }
     const study = e.target.closest('[data-study]');
     if (study) { $('wordSheet').close(); startCardsFrom(Number(study.dataset.study)); }
+    const say = e.target.closest('[data-say]');
+    if (say) { hooks.pauseAudio?.(); speak(say.dataset.say); }
+    const edit = e.target.closest('[data-edit]');
+    if (edit) { $('wordSheet').close(); openAddWord({ edit: Number(edit.dataset.edit) }); }
+    const del = e.target.closest('[data-del-mine]');
+    if (del) {
+      const no = Number(del.dataset.delMine);
+      const r = mineRecs.find((x) => x.no === no);
+      if (r && confirm(`「${r.word}」をマイ単語から削除しますか？`)) {
+        mineRecs = mineRecs.filter((x) => x.no !== no);
+        saveMine();
+        $('wordSheet').close();
+        renderWords();
+      }
+    }
   });
 
   initCards();
   setView(ui.view);
 }
 
+let viewShown = false;
+
 export function setView(view) {
   const prev = ui.view;
-  ui.view = ['words', 'idioms', 'listen'].includes(view) ? view : 'audio';
+  ui.view = VIEWS.includes(view) ? view : 'audio';
   store.set('view', ui.view);
   const words = ui.view === 'words' || ui.view === 'idioms';
   if (words && prev !== ui.view) {
@@ -172,16 +283,28 @@ export function setView(view) {
   }
   $('wordSearch').placeholder = isIdioms() ? 'イディオム・訳語・番号で検索' : '単語・訳語・番号で検索';
   const listen = ui.view === 'listen';
-  for (const b of document.querySelectorAll('.views [data-view]')) b.setAttribute('aria-selected', b.dataset.view === ui.view);
-  $('audioBar').hidden = words || listen;
-  $('audioView').hidden = words || listen;
+  const practice = ui.view === 'drill' || ui.view === 'shadow';
+  for (const b of document.querySelectorAll('.views [data-view]')) {
+    const on = b.dataset.view === ui.view;
+    b.setAttribute('aria-selected', on);
+    if (on) b.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  }
+  const audio = ui.view === 'audio';
+  $('audioBar').hidden = !audio;
+  $('audioView').hidden = !audio;
   $('wordsBar').hidden = !words;
   $('wordsView').hidden = !words;
   $('listenBar').hidden = !listen;
   $('listenView').hidden = !listen;
+  $('drillView').hidden = ui.view !== 'drill';
+  $('shadowView').hidden = ui.view !== 'shadow';
   document.body.classList.toggle('view-listen', listen);
+  document.body.classList.toggle('view-practice', practice);
   if (words) renderWords();
   if (listen) hooks.showListening?.();
+  const first = !viewShown;
+  viewShown = true;
+  if (first || prev !== ui.view) hooks.onView?.(ui.view, first ? null : prev);
   window.scrollTo(0, 0);
   window.dispatchEvent(new Event('scroll'));  // refresh the "now playing" jump button
 }
@@ -204,9 +327,9 @@ function currentTrack() {
 function visibleWords() {
   const { title, v, book } = deck();
   if (!v) return [];
-  const t = isIdioms() ? null : currentTrack();
+  const t = isIdioms() || isMine() ? null : currentTrack();
   let list = t ? wordsForTrack(book, t) : v.words;
-  if (ui.chip === 'fav') list = list.filter((w) => favs.has(favKey(title, w.no)));
+  if (isMine()) { /* no chip filters inside my words */ } else if (ui.chip === 'fav') list = list.filter((w) => favs.has(favKey(title, w.no)));
   else if (ui.chip.startsWith('rank:')) list = list.filter((w) => String(w.rank) === ui.chip.slice(5));
   else if (ui.chip.startsWith('group:')) list = list.filter((w) => w.group === ui.chip.slice(6));
   const tokens = norm(ui.query).split(' ').filter(Boolean);
@@ -216,8 +339,9 @@ function visibleWords() {
 
 export function renderWords() {
   if (!hooks || !['words', 'idioms'].includes(ui.view)) return;
-  const { title, v } = deck();
+  const { v } = deck();
   const chips = $('wordChips');
+  $('addWordBtn').hidden = isIdioms();
   if (!v) {
     chips.innerHTML = '';
     $('studyBar').hidden = true;
@@ -228,18 +352,27 @@ export function renderWords() {
       PC で tools/ のスクリプトを使って vocab.json を作り、教材フォルダに置くか、<br>右上のメニューの「単語データを取り込む」から読み込んでください。</li>`;
     return;
   }
-  const t = isIdioms() ? null : currentTrack();
-  const ranks = [...new Set(v.words.map((w) => w.rank).filter(Boolean))].sort((a, b) => a - b);
-  const groups = [...new Set(v.words.map((w) => w.group).filter(Boolean))];
-  const favCount = v.words.filter((w) => favs.has(favKey(title, w.no))).length;
-  const chip = (value, label) => `<button class="chip" role="tab" data-chip="${value}" aria-selected="${ui.chip === value}">${escapeHtml(label)}</button>`;
-  chips.innerHTML = [
-    t ? `<button class="chip track" data-chip="track" aria-selected="true" aria-label="トラックの絞り込みを解除">▶ ${escapeHtml(t.title)} ×</button>` : '',
-    chip('all', 'すべて'),
-    chip('fav', `★ お気に入り ${favCount}`),
-    ...(ranks.length > 1 ? ranks.map((r) => chip(`rank:${r}`, `RANK${r}`)) : []),
-    ...(groups.length > 1 ? groups.map((g) => chip(`group:${g}`, g)) : []),
-  ].join('');
+  // Chips come from the book (or idiom) deck even while マイ単語 is shown, so you can switch back.
+  const base = isIdioms() ? { title: IDIOMS, v: idioms } : bookDeck();
+  const t = isIdioms() || isMine() ? null : currentTrack();
+  const chip = (value, label) => `<button class="chip" role="tab" data-chip="${value}" aria-selected="${value === 'mine' ? isMine() : !isMine() && ui.chip === value}">${escapeHtml(label)}</button>`;
+  const parts = [];
+  if (base) {
+    const ranks = [...new Set(base.v.words.map((w) => w.rank).filter(Boolean))].sort((a, b) => a - b);
+    const groups = [...new Set(base.v.words.map((w) => w.group).filter(Boolean))];
+    const favCount = base.v.words.filter((w) => favs.has(favKey(base.title, w.no))).length;
+    parts.push(
+      t ? `<button class="chip track" data-chip="track" aria-selected="true" aria-label="トラックの絞り込みを解除">▶ ${escapeHtml(t.title)} ×</button>` : '',
+      chip('all', 'すべて'),
+      chip('fav', `★ お気に入り ${favCount}`),
+      ...(isIdioms() ? [] : [chip('mine', `✎ マイ単語 ${mineRecs.length}`)]),
+      ...(ranks.length > 1 ? ranks.map((r) => chip(`rank:${r}`, `RANK${r}`)) : []),
+      ...(groups.length > 1 ? groups.map((g) => chip(`group:${g}`, g)) : []),
+    );
+  } else if (!isIdioms()) {
+    parts.push(chip('mine', `✎ マイ単語 ${mineRecs.length}`));
+  }
+  chips.innerHTML = parts.join('');
   renderWordList();
 }
 
@@ -251,13 +384,16 @@ function renderWordList() {
   $('wordStatus').textContent = list.length === total ? `全 ${total} ${u}` : `${list.length} ${u} / 全 ${total} ${u}`;
   renderStudyBar(list.length);
   if (!list.length) {
-    $('wordList').innerHTML = `<li class="empty">${ui.chip === 'fav' ? 'お気に入りはまだありません。単語の ☆ をタップして登録できます。' : '見つかりませんでした'}</li>`;
+    const msg = isMine() && !ui.query
+      ? 'マイ単語はまだありません。<br>「＋ 追加」から登録するか、瞬間英作文・シャドーイングの英文の単語をタップして追加できます。'
+      : ui.chip === 'fav' ? 'お気に入りはまだありません。単語の ☆ をタップして登録できます。' : '見つかりませんでした';
+    $('wordList').innerHTML = `<li class="empty">${msg}</li>`;
     return;
   }
   $('wordList').innerHTML = list.map((w) => {
     const fav = favs.has(favKey(title, w.no));
     return `<li class="item word" data-no="${w.no}">
-      <span class="num">${w.no ?? ''}</span>
+      <span class="num">${title === MINE ? '' : w.no ?? ''}</span>
       <span class="txt"><div class="title">${escapeHtml(w.word)}</div><div class="sub">${escapeHtml(summary(w))}</div></span>
       <button class="star" data-fav="${w.no}" aria-pressed="${fav}" aria-label="お気に入り">${fav ? '★' : '☆'}</button>
     </li>`;
@@ -303,11 +439,11 @@ const refHtml = (r) => (typeof r === 'string'
   ? `<li>${escapeHtml(r)}</li>`
   : `<li><b>${escapeHtml(r.word)}</b>${r.meaning ? ` <span>${escapeHtml(r.meaning)}</span>` : ''}</li>`);
 
-function detailHtml(w, { head = true } = {}) {
+function detailHtml(w, { head = true, own = false } = {}) {
   const parts = [];
   if (head) {
     parts.push(`<div class="d-head">
-      <div class="d-no">${w.no != null ? String(w.no).padStart(4, '0') : ''}</div>
+      <div class="d-no">${own ? MINE : w.no != null ? String(w.no).padStart(4, '0') : ''}</div>
       <div class="d-word">${escapeHtml(w.word)}</div>
       ${w.pron ? `<div class="d-pron">[${escapeHtml(w.pron)}]</div>` : ''}
     </div>`);
@@ -333,15 +469,79 @@ function openDetail(no) {
   if (!w) return;
   const fav = favs.has(favKey(title, w.no));
   const ti = book ? trackForWord(book, w) : -1;
+  const own = title === MINE;
   $('wordSheetBody').innerHTML = `
     <div class="d-actions">
       <button class="star big" data-fav="${w.no}" aria-pressed="${fav}" aria-label="お気に入り">${fav ? '★' : '☆'}</button>
+      <button class="pill" data-say="${escapeHtml(w.word)}">🔊 読み上げ</button>
       ${ti >= 0 ? `<button class="pill" data-play="${ti}">▶ 収録音声を再生${w.cd ? `（CD${escapeHtml(w.cd)}）` : ''}</button>` : ''}
       <button class="pill" data-study="${w.no}">ここからカードで学習</button>
+      ${own ? `<button class="pill" data-edit="${w.no}">編集</button><button class="pill danger" data-del-mine="${w.no}">削除</button>` : ''}
     </div>
-    ${detailHtml(w)}`;
+    ${detailHtml(w, { own })}`;
   $('wordSheet').showModal();
   $('wordSheet').scrollTop = 0;
+}
+
+/* ---------------- adding my words ---------------- */
+
+let editing = null;  // no of the word being edited
+
+/** Opens the add form. prefill: {word, exEn, exJa} (e.g. a word tapped in a practice sentence) or {edit: no}. */
+export function openAddWord(prefill = {}) {
+  const f = $('addWordForm');
+  f.reset();
+  editing = null;
+  if (prefill.edit != null) {
+    const r = mineRecs.find((x) => x.no === prefill.edit);
+    if (!r) return;
+    editing = r.no;
+    for (const k of ['word', 'meaning', 'exEn', 'exJa', 'note']) f.elements[k].value = r[k] || '';
+  } else {
+    for (const k of ['word', 'meaning', 'exEn', 'exJa']) if (prefill[k]) f.elements[k].value = prefill[k];
+  }
+  $('addWordTitle').textContent = editing != null ? 'マイ単語を編集' : 'マイ単語に追加';
+  $('addWordSave').textContent = editing != null ? '保存' : '追加';
+  checkDuplicate();
+  $('addWordSheet').showModal();
+  (f.elements.word.value ? f.elements.meaning : f.elements.word).focus();
+}
+
+function checkDuplicate() {
+  const f = $('addWordForm');
+  const word = f.elements.word.value.trim();
+  const hit = word ? findWord(word, { except: editing }) : null;
+  const msg = $('addWordMsg');
+  msg.classList.toggle('ng', !!hit);
+  if (hit) {
+    const where = hit.title === MINE ? 'マイ単語' : `${hit.title}（No.${hit.w.no}）`;
+    msg.textContent = `「${hit.w.word}」はすでに${where}にあります：${summary(hit.w)}`;
+  } else {
+    msg.textContent = '';
+  }
+  $('addWordSave').disabled = !word || !!hit;
+  return !hit;
+}
+
+function initAddWord() {
+  const f = $('addWordForm');
+  f.elements.word.addEventListener('input', checkDuplicate);
+  $('addWordSheet').addEventListener('click', (e) => { if (e.target === $('addWordSheet')) $('addWordSheet').close(); });
+  $('addWordCancel').addEventListener('click', () => $('addWordSheet').close());
+  f.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!checkDuplicate()) return;
+    const rec = Object.fromEntries(['word', 'meaning', 'exEn', 'exJa', 'note'].map((k) => [k, f.elements[k].value.trim()]));
+    if (!rec.word) return;
+    const wasEdit = editing != null;
+    if (wasEdit) Object.assign(mineRecs.find((x) => x.no === editing), rec);
+    else addMine(rec);
+    saveMine();
+    $('addWordSheet').close();
+    hooks.toast?.(wasEdit ? `「${rec.word}」を保存しました` : `「${rec.word}」をマイ単語に追加しました`);
+    renderWords();
+    hooks.onMineChanged?.();
+  });
 }
 
 /* ---------------- flashcards ---------------- */
