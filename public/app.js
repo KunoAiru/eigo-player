@@ -738,6 +738,13 @@ $('installBtn').addEventListener('click', async () => {
   render();
   restoreResume();
   if ('serviceWorker' in navigator && window.isSecureContext) {
+    // When an updated app takes over, reload once so every file comes from the same version.
+    if (navigator.serviceWorker.controller) {
+      let reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!reloaded) { reloaded = true; location.reload(); }
+      });
+    }
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
 })();

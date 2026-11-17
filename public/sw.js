@@ -1,9 +1,13 @@
 // Keeps the app shell available offline. Audio and word data live in IndexedDB (imported) or on the PC server.
-const CACHE = 'player-v8';
+const CACHE = 'player-v9';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'util.js', 'vocab.js', 'idioms.json', 'listening.js', 'listening.json', 'speech.js', 'sentences.js', 'sentences.json', 'drill.js', 'shadow.js', 'zip.js', 'id3.js', 'db.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // cache: 'reload' skips the browser's HTTP cache (GitHub Pages allows 10 min), so an update never
+  // mixes a new index.html with an older script.
+  e.waitUntil(caches.open(CACHE)
+    .then((c) => c.addAll(SHELL.map((url) => new Request(url, { cache: 'reload' }))))
+    .then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
@@ -19,7 +23,7 @@ self.addEventListener('fetch', (e) => {
   if (url.pathname.includes('/api/') || url.pathname.includes('/audio/')) return;
   e.respondWith(caches.open(CACHE).then(async (cache) => {
     const cached = await cache.match(e.request, { ignoreSearch: true });
-    const fresh = fetch(e.request).then((res) => {
+    const fresh = fetch(e.request, { cache: 'no-cache' }).then((res) => {
       if (res.ok) cache.put(e.request, res.clone());
       return res;
     }).catch(() => cached);

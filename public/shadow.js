@@ -470,7 +470,8 @@ function useCustom() {
   if (!text) return;
   // One sentence per item; abbreviations such as "Mr." and "U.S." don't end a sentence.
   const safe = text.replace(/\b(?:Mr|Mrs|Ms|Dr|Prof|St|Jr|Sr|vs|etc|No|U\.S|U\.K|e\.g|i\.e|a\.m|p\.m)\./gi, (m) => m.replace(/\./g, '․'));
-  const parts = safe.split(/(?<=[.!?]["”’']?)\s+(?=["“‘']?[A-Z0-9])/).map((s) => s.replace(/․/g, '.'));
+  // (No lookbehind: older iPhone Safari can't parse it and the whole app would fail to start.)
+  const parts = safe.replace(/([.!?]["”’']?)\s+(?=["“‘']?[A-Z0-9])/g, '$1\n').split('\n').map((s) => s.replace(/․/g, '.'));
   st.custom = parts.map((s) => s.trim()).filter((s) => /[A-Za-z]/.test(s)).slice(0, 200)
     .map((en, i) => ({ id: `c${i + 1}`, en, ja: '' }));
   store.set('shadowCustom', st.custom);
